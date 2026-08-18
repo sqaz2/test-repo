@@ -22,19 +22,6 @@ jobs:
             -H 'X-With-Links-Summary: all' \
             'https://r.jina.ai/https://chatgpt.com/share/6a844445-5558-83e8-a713-1e79f6eedd30?ogimg=plain' \
             -o .tmp/share.md
-          echo 'share bytes:' $(wc -c < .tmp/share.md)
-          head -n 30 .tmp/share.md
-          curl --fail-with-body --location \
-            --retry 2 \
-            -H 'X-No-Cache: true' \
-            -H 'X-With-Links-Summary: all' \
-            'https://r.jina.ai/https://starmuff-nova-grid.sqaz.chatgpt.site' \
-            -o .tmp/nova.md
-          echo 'nova bytes:' $(wc -c < .tmp/nova.md)
-          head -n 30 .tmp/nova.md
-      - name: Upload recovered material
-        uses: actions/upload-artifact@v4
-        with:
-          name: recovered-material
-          path: .tmp/*.md
-          retention-days: 1
+          echo '===== SHARE BEGIN ====='
+          cat .tmp/share.md
+          echo '===== SHARE END ====='
