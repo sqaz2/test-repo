@@ -1,45 +1,43 @@
 name: Fetch ChatGPT shared conversation
 on:
-  push:
-    paths-ignore:
-      - '.tmp/**'
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   fetch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Fetch shared conversation JSON
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .tmp
-          curl --fail-with-body --location \
-            --retry 2 \
-            -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36' \
-            -H 'Accept: application/json' \
-            'https://chatgpt.com/backend-api/share/6a844445-5558-83e8-a713-1e79f6eedd30' \
-            -o .tmp/chatgpt-share.json
+          python -m pip install --quiet curl-cffi
           python - <<'PY'
+          from curl_cffi import requests
           import json, os
-          p='.tmp/chatgpt-share.json'
-          with open(p,'r',encoding='utf-8') as f:
-              d=json.load(f)
-          print('title:', d.get('title'))
-          print('messages:', len(d.get('linear_conversation') or []))
-          print('bytes:', os.path.getsize(p))
+          url='https://chatgpt.com/backend-api/share/6a844445-5558-83e8-a713-1e79f6eedd30'
+          r=requests.get(url, impersonate='chrome', timeout=45)
+          print('status:', r.status_code)
+          print('content-type:', r.headers.get('content-type'))
+          r.raise_for_status()
+          data=r.json()
+          with open('.tmp/chatgpt-share.json','w',encoding='utf-8') as f:
+              json.dump(data,f,ensure_ascii=False,indent=2)
+          print('title:', data.get('title'))
+          print('messages:', len(data.get('linear_conversation') or []))
+          print('bytes:', os.path.getsize('.tmp/chatgpt-share.json'))
           PY
-      - name: Commit fetched conversation
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'chatgpt-share-fetcher'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .tmp/chatgpt-share.json
-          git commit -m 'Fetch shared conversation' || exit 0
-          git push
+      - name: Upload shared conversation
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-share
+          path: .tmp/chatgpt-share.json
+          retention-days: 1
