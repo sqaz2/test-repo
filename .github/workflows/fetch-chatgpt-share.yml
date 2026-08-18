@@ -11,23 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Recover longest shared conversation response
+      - name: Recover shared conversation response
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .tmp
           url='https://r.jina.ai/https://chatgpt.com/share/6a844445-5558-83e8-a713-1e79f6eedd30?ogimg=plain'
-          for n in 1 2 3 4; do
-            curl --fail-with-body --location --retry 1 \
-              -H 'X-Timeout: 60' \
-              -H 'X-Cache-Tolerance: 3600' \
-              -H 'X-With-Links-Summary: all' \
-              "$url" -o ".tmp/share-$n.md" || true
-            echo "attempt $n bytes: $(wc -c < .tmp/share-$n.md 2>/dev/null || echo 0)"
-            sleep 2
-          done
-          best=$(wc -c .tmp/share-*.md | sort -nr | awk 'NR==1{print $2}')
-          echo "BEST=$best"
+          curl --fail-with-body --location --retry 1 \
+            -H 'X-Timeout: 60' \
+            -H 'X-Cache-Tolerance: 3600' \
+            -H 'X-With-Links-Summary: all' \
+            "$url" -o share.md
           echo '===== SHARE BEGIN ====='
-          cat "$best"
+          cat share.md
           echo '===== SHARE END ====='
