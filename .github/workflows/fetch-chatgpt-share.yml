@@ -1,4 +1,4 @@
-name: Fetch ChatGPT shared conversation
+name: Inspect shared ChatGPT Site artifact
 on:
   pull_request:
   workflow_dispatch:
@@ -7,20 +7,41 @@ permissions:
   contents: read
 
 jobs:
-  fetch:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Recover shared conversation response
+      - name: Recover rendered share HTML and artifact references
         shell: bash
         run: |
           set -euo pipefail
           url='https://r.jina.ai/https://chatgpt.com/share/6a844445-5558-83e8-a713-1e79f6eedd30?ogimg=plain'
-          curl --fail-with-body --location --retry 1 \
-            -H 'X-Timeout: 60' \
-            -H 'X-Cache-Tolerance: 3600' \
-            -H 'X-With-Links-Summary: all' \
-            "$url" -o share.md
-          echo '===== SHARE BEGIN ====='
-          cat share.md
-          echo '===== SHARE END ====='
+          curl --fail-with-body --location --retry 2 \
+            -H 'X-Engine: browser' \
+            -H 'X-Respond-With: html' \
+            -H 'X-Respond-Timing: network-idle' \
+            -H 'X-With-Iframe: true' \
+            -H 'X-With-Shadow-Dom: true' \
+            -H 'X-Retain-Media: html' \
+            -H 'X-Retain-Links: all' \
+            -H 'X-Timeout: 120' \
+            "$url" -o share.html
+          echo "HTML_BYTES=$(wc -c < share.html)"
+          echo '===== MATCHES ====='
+          python - <<'PY'
+          import re
+          s=open('share.html',encoding='utf-8',errors='ignore').read()
+          pats=[r'nova',r'starmuff',r'chatgpt\.site',r'artifact',r'site[_-]?id',r'project[_-]?id',r'deployment',r'src/App',r'work',r'iframe']
+          for p in pats:
+              print('\n###',p)
+              hits=list(re.finditer(p,s,re.I))
+              print('count=',len(hits))
+              for m in hits[:25]:
+                  a=max(0,m.start()-350); b=min(len(s),m.end()+800)
+                  print(s[a:b].replace('\n',' ')[:1500])
+                  print('---')
+          print('\n===== URLS =====')
+          for u in sorted(set(re.findall(r'https?://[^\s"\'<>]+',s))):
+              if any(x in u.lower() for x in ('chatgpt','starmuff','site','artifact','openai')):
+                  print(u[:2000])
+          PY
