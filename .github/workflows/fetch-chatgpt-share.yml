@@ -1,0 +1,36 @@
+name: Fetch ChatGPT shared conversation
+on:
+  push:
+    paths:
+      - '.github/workflows/fetch-chatgpt-share.yml'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch shared conversation JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --location \
+            --retry 2 \
+            -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36' \
+            -H 'Accept: application/json' \
+            'https://chatgpt.com/backend-api/share/6a844445-5558-83e8-a713-1e79f6eedd30' \
+            -o share.json
+          python - <<'PY'
+          import json
+          p='share.json'
+          with open(p,'r',encoding='utf-8') as f:
+              d=json.load(f)
+          print('title:', d.get('title'))
+          print('messages:', len(d.get('linear_conversation') or []))
+          print('bytes:', __import__('os').path.getsize(p))
+          PY
+      - name: Upload conversation
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-share
+          path: share.json
+          retention-days: 1
