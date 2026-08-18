@@ -11,37 +11,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Recover rendered share HTML and artifact references
+      - name: Dump public shared chat DOM with Chrome
         shell: bash
         run: |
           set -euo pipefail
-          url='https://r.jina.ai/https://chatgpt.com/share/6a844445-5558-83e8-a713-1e79f6eedd30?ogimg=plain'
-          curl --fail-with-body --location --retry 2 \
-            -H 'X-Engine: browser' \
-            -H 'X-Respond-With: html' \
-            -H 'X-Respond-Timing: network-idle' \
-            -H 'X-With-Iframe: true' \
-            -H 'X-With-Shadow-Dom: true' \
-            -H 'X-Retain-Media: html' \
-            -H 'X-Retain-Links: all' \
-            -H 'X-Timeout: 120' \
-            "$url" -o share.html
-          echo "HTML_BYTES=$(wc -c < share.html)"
-          echo '===== MATCHES ====='
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)
+          echo "CHROME=$CHROME"
+          test -n "$CHROME"
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --virtual-time-budget=30000 \
+            --user-agent='Mozilla/5.0 (Linux; Android 17; Pixel 9 Pro) AppleWebKit/537.36 Chrome/127 Mobile Safari/537.36' \
+            --dump-dom \
+            'https://chatgpt.com/share/6a844445-5558-83e8-a713-1e79f6eedd30?ogimg=plain' > share-dom.html 2>chrome.err || true
+          echo "DOM_BYTES=$(wc -c < share-dom.html)"
+          echo '===== CHROME STDERR TAIL ====='
+          tail -n 50 chrome.err || true
+          echo '===== ARTIFACT MATCHES ====='
           python - <<'PY'
           import re
-          s=open('share.html',encoding='utf-8',errors='ignore').read()
-          pats=[r'nova',r'starmuff',r'chatgpt\.site',r'artifact',r'site[_-]?id',r'project[_-]?id',r'deployment',r'src/App',r'work',r'iframe']
+          s=open('share-dom.html',encoding='utf-8',errors='ignore').read()
+          print('title', re.findall(r'<title[^>]*>(.*?)</title>',s,re.I|re.S)[:3])
+          pats=[r'nova',r'starmuff',r'chatgpt\.site',r'artifact',r'site[_-]?id',r'project[_-]?id',r'deployment',r'src/App',r'canvas',r'work',r'iframe',r'6a844445']
           for p in pats:
-              print('\n###',p)
               hits=list(re.finditer(p,s,re.I))
-              print('count=',len(hits))
-              for m in hits[:25]:
-                  a=max(0,m.start()-350); b=min(len(s),m.end()+800)
-                  print(s[a:b].replace('\n',' ')[:1500])
+              print('\n###',p,'count=',len(hits))
+              for m in hits[:30]:
+                  a=max(0,m.start()-450); b=min(len(s),m.end()+1000)
+                  print(s[a:b].replace('\n',' ')[:1800])
                   print('---')
-          print('\n===== URLS =====')
-          for u in sorted(set(re.findall(r'https?://[^\s"\'<>]+',s))):
-              if any(x in u.lower() for x in ('chatgpt','starmuff','site','artifact','openai')):
+          print('\n===== SELECTED URLS =====')
+          urls=sorted(set(re.findall(r'https?://[^\s"\'<>]+',s)))
+          for u in urls:
+              if any(x in u.lower() for x in ('chatgpt','starmuff','site','artifact','openai','backend-api')):
                   print(u[:2000])
           PY
